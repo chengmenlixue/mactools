@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -20,22 +21,56 @@ type GiferOptions struct {
 }
 
 // Gifer handles video to gif conversion using ffmpeg
-type Gifer struct{}
+type Gifer struct {
+	ffmpegPath string
+}
 
 func NewGifer() *Gifer {
-	return &Gifer{}
+	g := &Gifer{}
+	g.resolveFFmpegPath()
+	return g
+}
+
+// resolveFFmpegPath tries to find the absolute path of ffmpeg
+func (g *Gifer) resolveFFmpegPath() string {
+	if g.ffmpegPath != "" {
+		return g.ffmpegPath
+	}
+
+	// 1. Try system PATH
+	path, err := exec.LookPath("ffmpeg")
+	if err == nil {
+		g.ffmpegPath = path
+		return path
+	}
+
+	// 2. Try common macOS installation paths
+	commonPaths := []string{
+		"/opt/homebrew/bin/ffmpeg", // Apple Silicon
+		"/usr/local/bin/ffmpeg",    // Intel / Manual
+		"/usr/bin/ffmpeg",          // System
+	}
+
+	for _, p := range commonPaths {
+		if _, err := os.Stat(p); err == nil {
+			g.ffmpegPath = p
+			return p
+		}
+	}
+
+	return ""
 }
 
 // CheckFFmpeg checks if ffmpeg is installed
 func (g *Gifer) CheckFFmpeg() bool {
-	_, err := exec.LookPath("ffmpeg")
-	return err == nil
+	return g.resolveFFmpegPath() != ""
 }
 
 // Convert converts video to gif with high quality optimization
 func (g *Gifer) Convert(ctx context.Context, opts GiferOptions, progress chan<- float64) error {
-	if !g.CheckFFmpeg() {
-		return fmt.Errorf("ffmpeg not found in system PATH")
+	ffmpeg := g.resolveFFmpegPath()
+	if ffmpeg == "" {
+		return fmt.Errorf("ffmpeg not found in system PATH or common macOS locations (/opt/homebrew/bin, /usr/local/bin)")
 	}
 
 	// Algorithm: Use two-pass palette generation for highest quality
@@ -79,7 +114,7 @@ func (g *Gifer) Convert(ctx context.Context, opts GiferOptions, progress chan<- 
 		opts.OutputPath,
 	}
 
-	cmd := exec.CommandContext(ctx, "ffmpeg", args...)
+	cmd := exec.CommandContext(ctx, ffmpeg, args...)
 
 	// Capture stderr for progress parsing
 	stderr, err := cmd.StderrPipe()
