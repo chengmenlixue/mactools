@@ -1,0 +1,19 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "LogAna",
+  "outputfilename": "LogAna",
+  "info": {
+    "productName": "LogAna",
+    "productVersion": "1.0.0",
+    "copyright": "Copyright © 2024",
+    "comments": "High performance log analysis tool"
+  },
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "http://localhost:5173",
+  "author": {
+    "name": "LogAna",
+    "email": "logana@example.com"
+  }
+}
