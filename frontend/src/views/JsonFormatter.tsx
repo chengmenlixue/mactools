@@ -90,7 +90,7 @@ const JsonNode: React.FC<JsonNodeProps> = ({ data, name, depth, isLast, collapse
             <div className="min-h-[1.5em] whitespace-pre flex items-center">
                 <button 
                     onClick={() => onToggle(path)}
-                    className="absolute left-[-20px] w-4 h-4 flex items-center justify-center text-[10px] text-gray-500 hover:text-white transition-colors"
+                    className="absolute left-[-20px] w-4 h-4 flex items-center justify-center text-[10px] text-gray-500 hover:text-white transition-colors select-none"
                     style={{ marginLeft: `${depth * 2}rem` }}
                 >
                     {isCollapsed ? "▶" : "▼"}
@@ -153,8 +153,13 @@ const JsonFormatter: React.FC = () => {
     const [collapsedPaths, setCollapsedPaths] = useState<Set<string>>(new Set());
     const [commentMap, setCommentMap] = useState<Map<string, string>>(new Map());
     const [isInputStructured, setIsInputStructured] = useState(false);
+    const [splitWidth, setSplitWidth] = useState(50); // percentage
+    const [isResizing, setIsResizing] = useState(false);
+    
     const outputRef = useRef<HTMLDivElement>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
     const formattedTextWithCommentsRef = useRef("");
+    const isPastingRef = useRef(false);
 
     const togglePath = useCallback((path: string) => {
         setCollapsedPaths(prev => {
@@ -272,9 +277,54 @@ const JsonFormatter: React.FC = () => {
         }
     }, []);
 
+    // 拖拽逻辑
+    const startResizing = (e: React.MouseEvent) => {
+        setIsResizing(true);
+        e.preventDefault();
+    };
+
+    const stopResizing = useCallback(() => {
+        setIsResizing(false);
+    }, []);
+
+    const resize = useCallback((e: MouseEvent) => {
+        if (isResizing && containerRef.current) {
+            const containerRect = containerRef.current.getBoundingClientRect();
+            const newWidth = ((e.clientX - containerRect.left) / containerRect.width) * 100;
+            if (newWidth > 10 && newWidth < 90) {
+                setSplitWidth(newWidth);
+            }
+        }
+    }, [isResizing]);
+
     useEffect(() => {
-        formatJson(inputText);
-    }, [inputText, formatJson]);
+        if (isResizing) {
+            window.addEventListener('mousemove', resize);
+            window.addEventListener('mouseup', stopResizing);
+        } else {
+            window.removeEventListener('mousemove', resize);
+            window.removeEventListener('mouseup', stopResizing);
+        }
+        return () => {
+            window.removeEventListener('mousemove', resize);
+            window.removeEventListener('mouseup', stopResizing);
+        };
+    }, [isResizing, resize, stopResizing]);
+
+    const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+        const newValue = e.target.value;
+        setInputText(newValue);
+        
+        // 如果不是正在粘贴，则自动格式化
+        if (!isPastingRef.current) {
+            formatJson(newValue);
+        }
+        isPastingRef.current = false;
+    };
+
+    const handlePaste = () => {
+        isPastingRef.current = true;
+    };
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
         // Command+A (Mac) or Ctrl+A (Windows)
@@ -324,18 +374,31 @@ const JsonFormatter: React.FC = () => {
                 </div>
             </header>
 
-            <main className="flex-1 flex overflow-hidden">
-                <div className="flex-1 flex flex-col border-r border-gray-700">
+            <main ref={containerRef} className="flex-1 flex overflow-hidden relative">
+                <div 
+                    className="flex flex-col border-r border-gray-700"
+                    style={{ width: `${splitWidth}%` }}
+                >
                     <div className="p-2 bg-[#1e2a3d] text-[10px] text-gray-400 border-b border-gray-700 uppercase font-bold flex justify-between items-center">
                         <span>输入文本 (支持单引号/注释)</span>
-                        {jsonObject && (
-                            <button 
-                                onClick={() => setIsInputStructured(!isInputStructured)}
-                                className={`px-2 py-0.5 rounded text-[9px] transition-colors ${isInputStructured ? 'bg-yellow-600 text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-300'}`}
-                            >
-                                {isInputStructured ? "切换到文本模式" : "切换到结构化模式"}
-                            </button>
-                        )}
+                        <div className="flex space-x-2">
+                            {inputText && !jsonObject && !error && (
+                                <button 
+                                    onClick={() => formatJson(inputText)}
+                                    className="px-2 py-0.5 rounded text-[9px] bg-green-600 text-white hover:bg-green-500 transition-colors"
+                                >
+                                    立即格式化
+                                </button>
+                            )}
+                            {jsonObject && (
+                                <button 
+                                    onClick={() => setIsInputStructured(!isInputStructured)}
+                                    className={`px-2 py-0.5 rounded text-[9px] transition-colors ${isInputStructured ? 'bg-yellow-600 text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-300'}`}
+                                >
+                                    {isInputStructured ? "切换到文本模式" : "切换到结构化模式"}
+                                </button>
+                            )}
+                        </div>
                     </div>
                     {isInputStructured && jsonObject ? (
                         <div 
@@ -356,13 +419,24 @@ const JsonFormatter: React.FC = () => {
                     ) : (
                         <textarea 
                             value={inputText}
-                            onChange={(e) => setInputText(e.target.value)}
+                            onChange={handleTextChange}
+                            onPaste={handlePaste}
                             className="flex-1 bg-[#1b2636] p-4 outline-none resize-none font-mono text-sm"
                             placeholder="在此粘贴 JSON 文本..."
                         />
                     )}
                 </div>
-                <div className="flex-1 flex flex-col">
+
+                {/* Resizer */}
+                <div 
+                    className={`w-1 cursor-col-resize hover:bg-blue-500/50 transition-colors z-10 ${isResizing ? 'bg-blue-500' : 'bg-transparent'}`}
+                    onMouseDown={startResizing}
+                />
+
+                <div 
+                    className="flex flex-col"
+                    style={{ width: `${100 - splitWidth}%` }}
+                >
                     <div className="p-2 bg-[#1e2a3d] text-[10px] text-gray-400 border-b border-gray-700 uppercase font-bold flex justify-between items-center">
                         <span>格式化结果 (支持全选与折叠)</span>
                         <div className="flex space-x-2">
