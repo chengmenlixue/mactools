@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"os"
 	"path/filepath"
 	"runtime"
 	"time"
 
+	"logana/internal/gifer"
 	"logana/internal/replacer"
 	"logana/internal/scanner"
 
@@ -19,6 +21,7 @@ type App struct {
 	ctx        context.Context
 	scanner    *scanner.ParallelScanner
 	replacer   *replacer.Replacer
+	gifer      *gifer.Gifer
 	cancelFunc context.CancelFunc
 	isVisible  bool
 }
@@ -31,6 +34,7 @@ func NewApp() *App {
 	return &App{
 		scanner:  scanner.NewParallelScanner(runtime.NumCPU()),
 		replacer: replacer.NewReplacer(appConfigDir),
+		gifer:    gifer.NewGifer(),
 	}
 }
 
@@ -199,4 +203,74 @@ func (a *App) SaveRuleSets(ruleSets []replacer.RuleSet) error {
 // LoadRuleSets loads rule sets from disk
 func (a *App) LoadRuleSets() ([]replacer.RuleSet, error) {
 	return a.replacer.LoadRuleSets()
+}
+
+// ConvertVideoToGif converts video to gif with progress updates
+func (a *App) ConvertVideoToGif(opts gifer.GiferOptions) error {
+	progressChan := make(chan float64, 10)
+
+	// Create a new context for the conversion
+	convertCtx, cancel := context.WithCancel(a.ctx)
+	defer cancel()
+
+	// Handle progress updates
+	go func() {
+		for p := range progressChan {
+			select {
+			case <-convertCtx.Done():
+				return
+			default:
+				wailsruntime.EventsEmit(a.ctx, "gifer_progress", p)
+			}
+		}
+	}()
+
+	err := a.gifer.Convert(convertCtx, opts, progressChan)
+	close(progressChan)
+
+	if err != nil {
+		wailsruntime.EventsEmit(a.ctx, "gifer_error", err.Error())
+		return err
+	}
+
+	wailsruntime.EventsEmit(a.ctx, "gifer_complete", opts.OutputPath)
+	return nil
+}
+
+// CheckFFmpeg checks if ffmpeg is available
+func (a *App) CheckFFmpeg() bool {
+	return a.gifer.CheckFFmpeg()
+}
+
+// SelectVideoFile opens a file dialog to select a video file
+func (a *App) SelectVideoFile() (string, error) {
+	selection, err := wailsruntime.OpenFileDialog(a.ctx, wailsruntime.OpenDialogOptions{
+		Title: "Select Video File",
+		Filters: []wailsruntime.FileFilter{
+			{DisplayName: "Video Files (*.mp4, *.mov, *.avi, *.mkv)", Pattern: "*.mp4;*.mov;*.avi;*.mkv"},
+			{DisplayName: "All Files (*.*)", Pattern: "*.*"},
+		},
+	})
+	return selection, err
+}
+
+// GetFileBase64 reads a file and returns its base64 content
+func (a *App) GetFileBase64(filePath string) (string, error) {
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(data), nil
+}
+
+// SelectSaveGifPath opens a file dialog to select where to save the GIF
+func (a *App) SelectSaveGifPath(defaultName string) (string, error) {
+	selection, err := wailsruntime.SaveFileDialog(a.ctx, wailsruntime.SaveDialogOptions{
+		Title:           "Save GIF",
+		DefaultFilename: defaultName,
+		Filters: []wailsruntime.FileFilter{
+			{DisplayName: "GIF Files (*.gif)", Pattern: "*.gif"},
+		},
+	})
+	return selection, err
 }

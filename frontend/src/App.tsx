@@ -3,6 +3,7 @@ import Sidebar, { ViewType } from './components/Sidebar';
 import LogAnalysis from './views/LogAnalysis';
 import RegexReplacer from './views/RegexReplacer';
 import JsonFormatter from './views/JsonFormatter';
+import Gifer from './views/Gifer';
 import Settings from './views/Settings';
 
 function App() {
@@ -16,6 +17,7 @@ function App() {
                 {currentView === 'log' && <LogAnalysis />}
                 {currentView === 'regex' && <RegexReplacer />}
                 {currentView === 'json' && <JsonFormatter />}
+                {currentView === 'gifer' && <Gifer />}
                 {currentView === 'settings' && <Settings />}
             </div>
         </div>

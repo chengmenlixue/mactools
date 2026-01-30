@@ -1,6 +1,6 @@
 import React from 'react';
 
-export type ViewType = 'log' | 'regex' | 'json' | 'settings';
+export type ViewType = 'log' | 'regex' | 'json' | 'gifer' | 'settings';
 
 interface Props {
     currentView: ViewType;
@@ -41,6 +41,17 @@ const Sidebar: React.FC<Props> = ({ currentView, onViewChange }) => {
                     <span className="text-2xl">{"{}"}</span>
                 </div>
                 <span className="text-[10px] font-bold">JSON格式化</span>
+            </button>
+
+            <button 
+                onClick={() => onViewChange('gifer')}
+                className={`flex flex-col items-center group transition-all ${currentView === 'gifer' ? 'text-indigo-500' : 'text-gray-500 hover:text-gray-300'}`}
+                title="视频转GIF"
+            >
+                <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-1 transition-all ${currentView === 'gifer' ? 'bg-indigo-500/10 shadow-[0_0_15px_rgba(99,102,241,0.3)]' : 'bg-gray-800/50 group-hover:bg-gray-700'}`}>
+                    <span className="text-2xl">🎬</span>
+                </div>
+                <span className="text-[10px] font-bold">视频转GIF</span>
             </button>
 
             <button 
